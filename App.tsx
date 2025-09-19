@@ -98,6 +98,8 @@ const App: React.FC = () => {
   const [imageToImageInspirationAspectRatio, setImageToImageInspirationAspectRatio] = useState<AspectRatio>('1:1');
   const [inspirationStrength, setInspirationStrength] = useState<InspirationStrength>('high');
   const [imageToImageModel, setImageToImageModel] = useState<ImageModel>(ImageModel.IMAGEN);
+  // State for Infinite Canvas mode
+  const [infiniteCanvasModel, setInfiniteCanvasModel] = useState<ImageModel>(ImageModel.IMAGEN);
   
   // State for Infinite Canvas mode
   const [infiniteCanvasPrompt, setInfiniteCanvasPrompt] = useState<string>('');
@@ -1518,8 +1520,8 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
 
       {appMode === 'infiniteCanvas' && (
         <InfiniteCanvas
-            apiKey={apiKey}
-            onApiKeyNeeded={() => setIsApiKeyModalOpen(true)}
+            apiKey={infiniteCanvasModel === ImageModel.DOUBAO_4_0 ? volcengineApiKey : apiKey}
+            onApiKeyNeeded={() => (infiniteCanvasModel === ImageModel.DOUBAO_4_0 ? setIsSettingsModalOpen(true) : setIsApiKeyModalOpen(true))}
             onResult={handleInfiniteCanvasResult}
             initialPrompt={infiniteCanvasPrompt}
             onPromptChange={handleInfiniteCanvasPromptChange}
@@ -1528,6 +1530,9 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
             onGenerationStart={handleCreativeGenerationStart}
             onGenerationEnd={handleCreativeGenerationEnd}
             isLoading={isLoading}
+            activeModel={infiniteCanvasModel}
+            volcengineApiKey={volcengineApiKey}
+            onModelChange={setInfiniteCanvasModel}
         />
       )}
 

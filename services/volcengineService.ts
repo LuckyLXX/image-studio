@@ -20,6 +20,7 @@ export interface VolcEngineImageRequest {
   watermark?: boolean;
   guidance_scale?: number;
   image?: string | string[];
+  mask?: string;
   sequential_image_generation?: 'auto' | 'off';
   sequential_image_generation_options?: {
     max_images?: number;
@@ -510,6 +511,60 @@ export const generateComicStripWithVolcEngine = async (
     }
 
     throw new Error("火山引擎未能生成任何连环画面板。请检查您的故事或尝试其他风格。");
+  } catch (error) {
+    throw handleVolcEngineApiError(error);
+  }
+};
+
+// 局部重绘（Inpainting）
+export const generateInpaintingWithVolcEngine = async (
+  prompt: string,
+  originalImageBase64: string,
+  maskBase64: string,
+  apiKey: string,
+  size: string = '1024x1024'
+): Promise<string[]> => {
+  if (!apiKey) {
+    throw new Error("火山引擎API密钥是必需的。");
+  }
+
+  try {
+    const requestBody: VolcEngineImageRequest = {
+      model: VOLCENGINE_MODEL,
+      prompt,
+      image: originalImageBase64,
+      mask: maskBase64,
+      size,
+      stream: false,
+      response_format: 'b64_json',
+      watermark: true,
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), VOLC_TIMEOUT_MS);
+    const response = await fetch(VOLCENGINE_API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`火山引擎API错误: ${response.status} - ${errorText}`);
+    }
+
+    const data: VolcEngineImageResponse = await response.json();
+
+    if (data.data && data.data.length > 0) {
+      return data.data.map(item => item.b64_json ? `data:image/jpeg;base64,${item.b64_json}` : item.url);
+    }
+
+    throw new Error("火山引擎未能生成任何图片。请尝试调整您的蒙版或提示词。");
   } catch (error) {
     throw handleVolcEngineApiError(error);
   }

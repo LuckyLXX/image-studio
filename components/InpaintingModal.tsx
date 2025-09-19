@@ -1,8 +1,9 @@
 
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GeneratedImage } from '../types';
+import { GeneratedImage, ImageModel } from '../types';
 import { generateInpainting } from '../services/geminiService';
+import { generateInpaintingWithVolcEngine } from '../services/volcengineService';
 import { base64ToFile } from '../utils/imageUtils';
 
 interface InpaintingModalProps {
@@ -12,6 +13,8 @@ interface InpaintingModalProps {
   apiKey: string | null;
   onComplete: (newImageSrc: string) => void;
   onApiKeyNeeded: () => void;
+  activeModel?: ImageModel;
+  volcengineApiKey?: string | null;
 }
 
 const BRUSH_COLOR = 'rgba(99, 102, 241, 0.6)';
@@ -37,7 +40,7 @@ const drawPaths = (ctx: CanvasRenderingContext2D, pathsToDraw: Path[]) => {
     });
 };
 
-export const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, image, apiKey, onComplete, onApiKeyNeeded }) => {
+export const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClose, image, apiKey, onComplete, onApiKeyNeeded, activeModel = ImageModel.IMAGEN, volcengineApiKey }) => {
   const [prompt, setPrompt] = useState('');
   const [brushSize, setBrushSize] = useState(BRUSH_SIZES.medium);
   const [isLoading, setIsLoading] = useState(false);
@@ -209,7 +212,9 @@ export const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClos
   };
 
   const handleGenerate = async () => {
-    if (!apiKey) { onApiKeyNeeded(); return; }
+    const needVolc = activeModel === ImageModel.DOUBAO_4_0;
+    const keyToUse = needVolc ? volcengineApiKey : apiKey;
+    if (!keyToUse) { onApiKeyNeeded(); return; }
     if (!image) { setError("没有可编辑的图片。"); return; }
     if (!prompt.trim()) { setError("请输入重绘指令。"); return; }
     if (paths.length === 0) { setError("请在图片上绘制您想修改的区域。"); return; }
@@ -223,7 +228,25 @@ export const InpaintingModal: React.FC<InpaintingModalProps> = ({ isOpen, onClos
             createMaskFile(),
         ]);
         
-        const result = await generateInpainting(prompt, originalFile, maskFile, apiKey);
+        let result: string[];
+        if (needVolc) {
+          const [origBase64, maskBase64] = await Promise.all([
+            (async () => image.src)(),
+            (async () => (await base64ToFile(await (async () => maskFile)() as File, 'mask.png')) && maskCanvasToDataUrl())
+          ]);
+          // 直接读取已有 base64：image.src 已为 data URL，mask 通过 createMaskFile 已是文件，转回 base64
+          const maskDataUrl = await (async () => {
+            const fr = new FileReader();
+            return await new Promise<string>((resolve, reject) => {
+              fr.onload = () => resolve(fr.result as string);
+              fr.onerror = reject;
+              fr.readAsDataURL(maskFile);
+            });
+          })();
+          result = await generateInpaintingWithVolcEngine(prompt, image.src, maskDataUrl, keyToUse, '1024x1024');
+        } else {
+          result = await generateInpainting(prompt, originalFile, maskFile, keyToUse);
+        }
         
         if (result.length > 0) {
             setGeneratedResultSrc(result[0]);

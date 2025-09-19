@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ImageUploader } from './ImageUploader';
 import { generateInpainting } from '../services/geminiService';
+import { generateInpaintingWithVolcEngine } from '../services/volcengineService';
+import { ImageModel } from '../types';
 import { fileToBase64, base64ToFile } from '../utils/imageUtils';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -22,6 +24,9 @@ interface InfiniteCanvasProps {
   isLoading: boolean;
   onGenerationStart: () => void;
   onGenerationEnd: () => void;
+  activeModel?: ImageModel;
+  volcengineApiKey?: string | null;
+  onModelChange?: (model: ImageModel) => void;
 }
 
 type Direction = 'N' | 'E' | 'S' | 'W';
@@ -50,6 +55,9 @@ export const InfiniteCanvas: React.FC<InfiniteCanvasProps> = ({
   isLoading,
   onGenerationStart,
   onGenerationEnd,
+  activeModel = ImageModel.IMAGEN,
+  volcengineApiKey,
+  onModelChange,
 }) => {
   const [startFile, setStartFile] = useState<File | null>(initialStartFile);
   const [currentImage, setCurrentImage] = useState<HTMLImageElement | null>(null);
@@ -354,7 +362,9 @@ export const InfiniteCanvas: React.FC<InfiniteCanvasProps> = ({
   };
 
   const handleGenerate = async () => {
-    if (!apiKey) { onApiKeyNeeded(); return; }
+    const needVolc = activeModel === ImageModel.DOUBAO_4_0;
+    const keyToUse = needVolc ? volcengineApiKey : apiKey;
+    if (!keyToUse) { onApiKeyNeeded(); return; }
     if (!currentImage || !activeExpansion) { setError("无效的操作。"); return; }
     if (!initialPrompt.trim()) { setError("请输入您的创意指令。"); return; }
     
@@ -414,7 +424,15 @@ export const InfiniteCanvas: React.FC<InfiniteCanvasProps> = ({
       const maskFile = await base64ToFile(maskCanvas.toDataURL('image/png'), 'mask.png');
       
       const outpaintingPrompt = `Task: Outpainting. Using the provided mask, fill the masked (white) area of the original image with content that seamlessly extends the existing image, following this description: "${initialPrompt}". Maintain the original image's style and content and ensure a natural transition.`;
-      const result = await generateInpainting(outpaintingPrompt, originalFile, maskFile, apiKey);
+      let result: string[];
+      if (needVolc) {
+        // 读回 base64
+        const origDataUrl = combinedCanvas.toDataURL('image/png');
+        const maskDataUrl = maskCanvas.toDataURL('image/png');
+        result = await generateInpaintingWithVolcEngine(outpaintingPrompt, origDataUrl, maskDataUrl, keyToUse, '1024x1024');
+      } else {
+        result = await generateInpainting(outpaintingPrompt, originalFile, maskFile, keyToUse);
+      }
 
       if (result.length > 0) {
         setUndoStack(prev => [...prev, oldImage.src]);
@@ -588,6 +606,26 @@ export const InfiniteCanvas: React.FC<InfiniteCanvasProps> = ({
                 {/* Control Panel */}
                 <div className="w-full lg:w-96 flex-shrink-0 bg-white p-6 rounded-2xl shadow-lg border border-slate-200 flex flex-col gap-4">
                     <h2 className="text-xl font-bold text-slate-800">控制面板</h2>
+                    <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-full">
+                      <button
+                        type="button"
+                        onClick={() => onModelChange && onModelChange(ImageModel.IMAGEN)}
+                        disabled={isLoading}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 border ${activeModel === ImageModel.IMAGEN ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                        title="使用 Imagen 4.0"
+                      >
+                        Imagen 4.0
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onModelChange && onModelChange(ImageModel.DOUBAO_4_0)}
+                        disabled={isLoading}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 border ${activeModel === ImageModel.DOUBAO_4_0 ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                        title="使用豆包 4.0"
+                      >
+                        豆包 4.0
+                      </button>
+                    </div>
                     <div>
                       <label htmlFor="ic-prompt" className="block text-sm font-medium text-slate-700 mb-1">创意指令</label>
                       <textarea
