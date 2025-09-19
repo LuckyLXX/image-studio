@@ -68,6 +68,11 @@ const base64ToGenerativePart = (base64Data: string): {inlineData: {data: string,
 };
 
 export const generateIllustratedCards = async (prompt: string, style: ImageStyle, model: ImageModel, apiKey: string): Promise<string[]> => {
+    // 如果是火山引擎模型，调用火山引擎服务
+    if (model === ImageModel.DOUBAO_4_0) {
+      const { generateIllustratedCardsWithVolcEngine } = await import('./volcengineService');
+      return generateIllustratedCardsWithVolcEngine(prompt, style, apiKey);
+    }
   if (!apiKey) {
     throw new Error("API Key is required to generate images.");
   }
@@ -131,7 +136,12 @@ export const generateIllustratedCards = async (prompt: string, style: ImageStyle
   }
 };
 
-export const generateComicStrip = async (story: string, style: ImageStyle, apiKey: string, numberOfImages: number): Promise<{ imageUrls: string[], panelPrompts: string[] }> => {
+export const generateComicStrip = async (story: string, style: ImageStyle, apiKey: string, numberOfImages: number, model: ImageModel = ImageModel.IMAGEN): Promise<{ imageUrls: string[], panelPrompts: string[] }> => {
+    // 如果是火山引擎模型，调用火山引擎服务
+    if (model === ImageModel.DOUBAO_4_0) {
+      const { generateComicStripWithVolcEngine } = await import('./volcengineService');
+      return generateComicStripWithVolcEngine(story, style, apiKey, numberOfImages);
+    }
     if (!apiKey) {
         throw new Error("API Key is required to generate images.");
     }
@@ -332,12 +342,24 @@ export const generateVideoScriptsForComicStrip = async (story: string, images: G
 };
 
 
-export const generateTextToImage = async (prompt: string, negativePrompt: string, apiKey: string, numberOfImages: number, aspectRatio: AspectRatio): Promise<string[]> => {
+export const generateTextToImage = async (prompt: string, negativePrompt: string, apiKey: string, numberOfImages: number, aspectRatio: AspectRatio, model: ImageModel = ImageModel.IMAGEN, style: ImageStyle = ImageStyle.ILLUSTRATION): Promise<string[]> => {
     if (!apiKey) {
       throw new Error("API Key is required to generate images.");
     }
+
+    // 如果是火山引擎模型，调用火山引擎服务
+    if (model === ImageModel.DOUBAO_4_0) {
+      const { generateTextToImageWithVolcEngine } = await import('./volcengineService');
+      // 并行请求多张，兼容 TextToImage 数量选择
+      const tasks = Array.from({ length: Math.max(1, numberOfImages) }, () =>
+        generateTextToImageWithVolcEngine(prompt, negativePrompt, apiKey, aspectRatio, style)
+      );
+      const results = await Promise.all(tasks);
+      return results.flat();
+    }
+
     const ai = new GoogleGenAI({ apiKey });
-  
+
     try {
       const config: GenerateImagesConfig = {
         numberOfImages: numberOfImages,
@@ -350,15 +372,15 @@ export const generateTextToImage = async (prompt: string, negativePrompt: string
       }
 
       const response = await ai.models.generateImages({
-        model: ImageModel.IMAGEN,
+        model: model === ImageModel.NANO_BANANA ? ImageModel.NANO_BANANA : ImageModel.IMAGEN,
         prompt: prompt,
         config: config,
       });
-  
+
       if (response.generatedImages && response.generatedImages.length > 0) {
         return response.generatedImages.map(img => `data:image/jpeg;base64,${img.image.imageBytes}`);
       }
-  
+
       throw new Error("AI未能生成任何图片。请尝试更换您的提示词。");
     } catch (error) {
       throw handleApiError(error);

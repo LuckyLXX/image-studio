@@ -92,7 +92,7 @@ export const IllustratedWiki: React.FC<IllustratedWikiProps> = ({
                 : 'border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
             }`}
             disabled={isLoading}
-            aria-invalid={!!formError}
+            aria-invalid={formError ? true : undefined}
             aria-describedby={formError ? 'prompt-error' : undefined}
           />
           <button
@@ -126,6 +126,7 @@ export const IllustratedWiki: React.FC<IllustratedWikiProps> = ({
             <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-full">
               <ModelButton value={ImageModel.IMAGEN} label="Imagen 4.0" />
               <ModelButton value={ImageModel.NANO_BANANA} label="Nano-Banana" />
+              <ModelButton value={ImageModel.DOUBAO_4_0} label="豆包 4.0" />
             </div>
           </div>
         </div>

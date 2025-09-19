@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { GeneratedImage, AspectRatio, InspirationStrength } from '../types';
+import { GeneratedImage, AspectRatio, InspirationStrength, ImageModel } from '../types';
 import { generateFromImageAndPrompt, generateWithStyleInspiration } from '../services/geminiService';
+import { generateImageToImageWithVolcEngine, generateImageFusionWithVolcEngine } from '../services/volcengineService';
 import { ImageUploader } from './ImageUploader';
 import { LoadingState } from './LoadingState';
 import { ImageGrid } from './ImageGrid';
 import { EmptyState } from './EmptyState';
 import { ImagePreview } from './ImagePreview';
 import { InpaintingModal } from './InpaintingModal';
-import { resizeImage, base64ToFile } from '../utils/imageUtils';
+import { resizeImage, base64ToFile, fileToBase64 } from '../utils/imageUtils';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { VideoIcon } from './icons/VideoIcon';
@@ -37,6 +38,8 @@ interface ImageToImageProps {
   inspirationStrength: InspirationStrength;
   onInspirationStrengthChange: (strength: InspirationStrength) => void;
   onToggleFavorite: (imageId: string) => void;
+  activeModel: ImageModel;
+  onModelChange: (model: ImageModel) => void;
 }
 
 const ModeButton: React.FC<{
@@ -81,7 +84,9 @@ export const ImageToImage: React.FC<ImageToImageProps> = ({
   onInspirationAspectRatioChange,
   inspirationStrength,
   onInspirationStrengthChange,
-  onToggleFavorite
+  onToggleFavorite,
+  activeModel,
+  onModelChange
 }) => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -146,10 +151,30 @@ export const ImageToImage: React.FC<ImageToImageProps> = ({
       let resultSettings: { strength?: InspirationStrength } = {};
 
       if (i2iMode === 'inspiration') {
-        imageUrls = await generateWithStyleInspiration(uploadedFiles[0], prompt, apiKey, inspirationStrength);
+        if (activeModel === ImageModel.DOUBAO_4_0) {
+          // 豆包4.0：多图融合/风格启发（上限15张）
+          const filesCapped = uploadedFiles.slice(0, 15);
+          // 尺寸较大的图片会导致请求体过大，先做等比压缩到 1600px 边长
+          const base64Array = await Promise.all(filesCapped.map(async (file) => {
+            try {
+              const imgData = await fileToBase64(file);
+              return imgData;
+            } catch (e) {
+              return await fileToBase64(file);
+            }
+          }));
+          imageUrls = await generateImageFusionWithVolcEngine(prompt, base64Array, apiKey);
+        } else {
+          imageUrls = await generateWithStyleInspiration(uploadedFiles[0], prompt, apiKey, inspirationStrength);
+        }
         resultSettings = { strength: inspirationStrength };
       } else {
-        imageUrls = await generateFromImageAndPrompt(prompt, uploadedFiles, apiKey);
+        if (activeModel === ImageModel.DOUBAO_4_0) {
+          const base64 = await fileToBase64(uploadedFiles[0]);
+          imageUrls = await generateImageToImageWithVolcEngine(prompt, base64, apiKey);
+        } else {
+          imageUrls = await generateFromImageAndPrompt(prompt, uploadedFiles, apiKey);
+        }
       }
       
       const resizedImageUrls = await Promise.all(
@@ -299,13 +324,39 @@ export const ImageToImage: React.FC<ImageToImageProps> = ({
                   </div>
               </div>
 
+              <div className="flex justify-center">
+                <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-full w-full max-w-xs">
+                  <button
+                    type="button"
+                    onClick={() => onModelChange(ImageModel.IMAGEN)}
+                    disabled={isLoading}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 border ${activeModel === ImageModel.IMAGEN ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                    title="使用 Imagen 4.0"
+                  >
+                    Imagen 4.0
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onModelChange(ImageModel.DOUBAO_4_0)}
+                    disabled={isLoading}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 border ${activeModel === ImageModel.DOUBAO_4_0 ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                    title="使用豆包 4.0"
+                  >
+                    豆包 4.0
+                  </button>
+                </div>
+              </div>
+
               <div className="grid md:grid-cols-2 gap-8 items-stretch">
                 
                 {/* Left Column: Uploader & Settings */}
                 <div className="flex flex-col gap-8">
                   <div>
-                    <h2 className="text-xl font-bold text-slate-700 mb-3">{i2iMode === 'inspiration' ? '1. 上传参考图' : '1. 上传图片'}</h2>
-                    <ImageUploader files={uploadedFiles} onFilesChange={handleFilesChange} disabled={isLoading} maxFiles={i2iMode === 'inspiration' ? 1 : 5} onPreviewClick={handlePreviewUploaded} />
+                    <h2 className="text-xl font-bold text-slate-700 mb-3">{i2iMode === 'inspiration' ? '1. 上传参考图（可多张）' : '1. 上传图片'}</h2>
+                    <ImageUploader files={uploadedFiles} onFilesChange={handleFilesChange} disabled={isLoading} maxFiles={i2iMode === 'inspiration' ? 5 : 5} onPreviewClick={handlePreviewUploaded} />
+                    {i2iMode === 'inspiration' && (
+                      <p className="mt-2 text-xs text-slate-500">最多可选 15 张（豆包4.0 限制）。当前已选 {uploadedFiles.length} 张。</p>
+                    )}
                   </div>
                    {i2iMode === 'inspiration' && (
                     <div className="animate-fade-in">

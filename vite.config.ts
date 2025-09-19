@@ -13,6 +13,16 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      server: {
+        proxy: {
+          '/ark': {
+            target: 'https://ark.cn-beijing.volces.com',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (path) => path.replace(/^\/ark/, ''),
+          }
+        }
       }
     };
 });

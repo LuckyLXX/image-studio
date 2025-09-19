@@ -1,0 +1,140 @@
+graph TD
+
+    %% 样式定义
+    classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef service fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef utility fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef database fill:#f5f5f5,stroke:#424242,stroke-width:2px
+    classDef external fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+
+    %% 前端组件层
+    subgraph "前端界面层 (Frontend UI)"
+        direction TB
+        App["App.tsx (主应用组件)"]
+        Header["Header.tsx (顶部导航)"]
+
+        subgraph "主要功能模块"
+            direction LR
+            IllustratedWiki["IllustratedWiki.tsx (图解百科)"]
+            ComicStrip["ComicStrip.tsx (连环画本)"]
+            TextToImage["TextToImage.tsx (文生图)"]
+            ImageToImage["ImageToImage.tsx (图生图)"]
+            ImageToVideo["ImageToVideo.tsx (图生视频)"]
+            InfiniteCanvas["InfiniteCanvas.tsx (无限画布)"]
+        end
+
+        subgraph "通用组件"
+            direction LR
+            ImageGrid["ImageGrid.tsx (图片网格)"]
+            ImagePreview["ImagePreview.tsx (图片预览)"]
+            History["History.tsx (历史记录)"]
+            ApiKeyModal["ApiKeyModal.tsx (API密钥管理)"]
+            ImportExportModal["ImportExportModal.tsx (导入导出)"]
+        end
+
+        subgraph "模态框组件"
+            direction LR
+            ComicPanelEditorModal["ComicPanelEditorModal.tsx (画板编辑)"]
+            InpaintingModal["InpaintingModal.tsx (局部重绘)"]
+            TagManager["TagManager.tsx (标签管理)"]
+        end
+    end
+
+    %% 业务服务层
+    subgraph "业务服务层 (Business Services)"
+        direction TB
+        GeminiService["services/geminiService.ts (AI服务核心)"]
+        HistoryService["services/historyService.ts (历史记录服务)"]
+    end
+
+    %% 工具函数层
+    subgraph "工具函数层 (Utilities)"
+        direction TB
+        ImageUtils["utils/imageUtils.ts (图像处理工具)"]
+        VideoUtils["utils/videoUtils.ts (视频处理工具)"]
+        PromptUtils["utils/promptUtils.ts (提示词构建)"]
+    end
+
+    %% 外部服务层
+    subgraph "外部服务层 (External Services)"
+        direction TB
+        GeminiAPI["Google Gemini API (AI生成服务)"]
+        LocalStorage["浏览器 LocalStorage (本地存储)"]
+        IndexedDB["浏览器 IndexedDB (历史记录)"]
+    end
+
+    %% 数据流和依赖关系
+    %% App 组件作为入口点
+    App --> Header
+
+    %% 主要功能模块
+    App --> IllustratedWiki
+    App --> ComicStrip
+    App --> TextToImage
+    App --> ImageToImage
+    App --> ImageToVideo
+    App --> InfiniteCanvas
+
+    %% 通用组件
+    App --> ImageGrid
+    App --> ImagePreview
+    App --> History
+    App --> ApiKeyModal
+    App --> ImportExportModal
+
+    %% 模态框组件
+    App --> ComicPanelEditorModal
+    App --> InpaintingModal
+    App --> TagManager
+
+    %% 业务服务依赖
+    IllustratedWiki -->|调用| GeminiService
+    ComicStrip -->|调用| GeminiService
+    TextToImage -->|调用| GeminiService
+    ImageToImage -->|调用| GeminiService
+    ImageToVideo -->|调用| GeminiService
+    InfiniteCanvas -->|调用| GeminiService
+
+    History -->|调用| HistoryService
+    ImportExportModal -->|调用| HistoryService
+
+    %% 工具函数使用
+    IllustratedWiki -->|使用| ImageUtils
+    ComicStrip -->|使用| ImageUtils
+    TextToImage -->|使用| ImageUtils
+    ImageToImage -->|使用| ImageUtils
+    InfiniteCanvas -->|使用| ImageUtils
+
+    ComicStrip -->|使用| VideoUtils
+    ImageToVideo -->|使用| VideoUtils
+
+    TextToImage -->|使用| PromptUtils
+
+    %% 外部API调用
+    GeminiService -->|调用| GeminiAPI
+    HistoryService -->|存储| IndexedDB
+    ApiKeyModal -->|存储| LocalStorage
+
+    %% 数据流向说明
+    GeminiAPI -.->|AI生成结果| GeminiService
+    GeminiService -.->|处理后的数据| IllustratedWiki
+    GeminiService -.->|处理后的数据| ComicStrip
+    GeminiService -.->|处理后的数据| TextToImage
+    GeminiService -.->|处理后的数据| ImageToImage
+    GeminiService -.->|处理后的数据| ImageToVideo
+    GeminiService -.->|处理后的数据| InfiniteCanvas
+
+    HistoryService -.->|历史记录数据| History
+    HistoryService -.->|历史记录数据| ImportExportModal
+
+    %% 应用样式
+    class App,Header,IllustratedWiki,ComicStrip,TextToImage,ImageToImage,ImageToVideo,InfiniteCanvas,ImageGrid,ImagePreview,History,ApiKeyModal,ImportExportModal,ComicPanelEditorModal,InpaintingModal,TagManager frontend
+    class GeminiService,HistoryService service
+    class ImageUtils,VideoUtils,PromptUtils utility
+    class GeminiAPI,LocalStorage,IndexedDB external
+
+    %% 核心架构说明注释
+    %% 这是一个基于React + TypeScript的AI图像生成应用
+    %% 采用分层架构：前端UI -> 业务服务 -> 工具函数 -> 外部服务
+    %% 主要功能：图像生成、编辑、视频制作、历史记录管理
+    %% 技术栈：React19、TypeScript、Google Gemini API、Vite

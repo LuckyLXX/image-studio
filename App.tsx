@@ -19,7 +19,8 @@ import { TagManager } from './components/TagManager';
 import { ComicPanelEditorModal } from './components/ComicPanelEditorModal';
 // 新增导入导出模态框组件
 import { ImportExportModal } from './components/ImportExportModal';
-import { ImageStyle, GeneratedImage, HistoryRecord, AppMode, CameraMovement, ImageModel, AspectRatio, InspirationStrength, ComicStripGenerationPhase, ComicStripPanelStatus, ComicStripTransitionStatus, ComicStripTransitionOption } from './types';
+import { SettingsModal } from './components/SettingsModal';
+import { ImageStyle, GeneratedImage, HistoryRecord, AppMode, CameraMovement, ImageModel, AspectRatio, InspirationStrength, ComicStripGenerationPhase, ComicStripPanelStatus, ComicStripTransitionStatus, ComicStripTransitionOption, ApiProvider } from './types';
 import { generateIllustratedCards, generateTextToImage, generateComicStrip, generateVideoScriptsForComicStrip, generateVideo, getVideosOperation, generateVideoTransition } from './services/geminiService';
 import { addHistory, getAllHistory, clearHistory, removeHistoryItem, getTags, saveTags, findHistoryBySourceImage } from './services/historyService';
 import { resizeImage, createThumbnail, base64ToFile, fileToBase64 } from './utils/imageUtils';
@@ -51,6 +52,10 @@ const App: React.FC = () => {
   // 新增导入导出模态框状态
   const [isImportExportModalOpen, setIsImportExportModalOpen] = useState<boolean>(false);
 
+  // 新增设置模态框状态
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [volcengineApiKey, setVolcengineApiKey] = useState<string | null>(null);
+
   // State for Wiki mode
   const [wikiPrompt, setWikiPrompt] = useState<string>('');
   const [activeStyle, setActiveStyle] = useState<ImageStyle>(ImageStyle.ILLUSTRATION);
@@ -62,6 +67,7 @@ const App: React.FC = () => {
   const [comicStripStyle, setComicStripStyle] = useState<ImageStyle>(ImageStyle.ILLUSTRATION);
   const [comicStripImages, setComicStripImages] = useState<GeneratedImage[]>([]);
   const [comicStripNumImages, setComicStripNumImages] = useState<number>(4);
+  const [comicStripModel, setComicStripModel] = useState<ImageModel>(ImageModel.IMAGEN);
   const [comicStripVideoGenerationPhase, setComicStripVideoGenerationPhase] = useState<ComicStripGenerationPhase>('idle');
   const [isGeneratingScripts, setIsGeneratingScripts] = useState<boolean>(false);
   const [comicStripVideoScripts, setComicStripVideoScripts] = useState<string[]>([]);
@@ -82,6 +88,7 @@ const App: React.FC = () => {
   const [textToImageNumImages, setTextToImageNumImages] = useState<number>(2);
   const [textToImageAspectRatio, setTextToImageAspectRatio] = useState<AspectRatio>('16:9');
   const [textToImageKeywords, setTextToImageKeywords] = useState<string[]>([]);
+  const [textToImageModel, setTextToImageModel] = useState<ImageModel>(ImageModel.IMAGEN);
 
   // State for ImageToImage mode
   const [imageToImagePrompt, setImageToImagePrompt] = useState<string>('');
@@ -90,6 +97,7 @@ const App: React.FC = () => {
   const [imageToImageMode, setImageToImageMode] = useState<'edit' | 'inspiration'>('edit');
   const [imageToImageInspirationAspectRatio, setImageToImageInspirationAspectRatio] = useState<AspectRatio>('1:1');
   const [inspirationStrength, setInspirationStrength] = useState<InspirationStrength>('high');
+  const [imageToImageModel, setImageToImageModel] = useState<ImageModel>(ImageModel.IMAGEN);
   
   // State for Infinite Canvas mode
   const [infiniteCanvasPrompt, setInfiniteCanvasPrompt] = useState<string>('');
@@ -124,6 +132,12 @@ const App: React.FC = () => {
         setApiKey(genericKey);
       }
     }
+
+    // 加载火山引擎API密钥
+    const volcengineKey = localStorage.getItem('volcengine-api-key');
+    if (volcengineKey) {
+      setVolcengineApiKey(volcengineKey);
+    }
   }, []);
   
   useEffect(() => {
@@ -143,9 +157,24 @@ const App: React.FC = () => {
 
 
   const handleGenerateWiki = async () => {
-    if (!apiKey) {
-      setError('请先设置您的 Gemini API Key。');
-      setIsApiKeyModalOpen(true);
+    let effectiveApiKey: string | null = null;
+    let apiProvider: ApiProvider = ApiProvider.GEMINI;
+
+    if (wikiModel === ImageModel.DOUBAO_4_0) {
+      effectiveApiKey = volcengineApiKey;
+      apiProvider = ApiProvider.VOLCENGINE;
+    } else {
+      effectiveApiKey = apiKey;
+      apiProvider = ApiProvider.GEMINI;
+    }
+
+    if (!effectiveApiKey) {
+      setError(`请先设置您的 ${wikiModel === ImageModel.DOUBAO_4_0 ? '火山引擎' : 'Gemini'} API Key。`);
+      if (wikiModel === ImageModel.DOUBAO_4_0) {
+        setIsSettingsModalOpen(true);
+      } else {
+        setIsApiKeyModalOpen(true);
+      }
       return;
     }
 
@@ -154,12 +183,12 @@ const App: React.FC = () => {
     setPreviewImageIndex(null);
 
     try {
-      const imageUrls = await generateIllustratedCards(wikiPrompt, activeStyle, wikiModel, apiKey);
+      const imageUrls = await generateIllustratedCards(wikiPrompt, activeStyle, wikiModel, effectiveApiKey);
 
       const resizedImageUrls = await Promise.all(
           imageUrls.map(src => resizeImage(src))
       );
-      
+
       const imagesWithIds: GeneratedImage[] = resizedImageUrls.map((src, index) => ({
         id: `${Date.now()}-${index}`,
         src,
@@ -176,7 +205,7 @@ const App: React.FC = () => {
           },
         },
       }));
-      
+
       if (imagesWithIds.length > 0) {
         const thumbnail = await createThumbnail(imagesWithIds[0].src);
         const newRecord: HistoryRecord = {
@@ -185,6 +214,7 @@ const App: React.FC = () => {
             prompt: wikiPrompt,
             style: activeStyle,
             model: wikiModel,
+            apiProvider,
             images: imagesWithIds,
             thumbnail,
             timestamp: Date.now(),
@@ -212,10 +242,25 @@ const App: React.FC = () => {
   };
   
   const handleGenerateComicStrip = async () => {
-    if (!apiKey) {
-        setError('请先设置您的 Gemini API Key。');
+    let effectiveApiKey: string | null = null;
+    let apiProvider: ApiProvider = ApiProvider.GEMINI;
+
+    if (comicStripModel === ImageModel.DOUBAO_4_0) {
+      effectiveApiKey = volcengineApiKey;
+      apiProvider = ApiProvider.VOLCENGINE;
+    } else {
+      effectiveApiKey = apiKey;
+      apiProvider = ApiProvider.GEMINI;
+    }
+
+    if (!effectiveApiKey) {
+      setError(`请先设置您的 ${comicStripModel === ImageModel.DOUBAO_4_0 ? '火山引擎' : 'Gemini'} API Key。`);
+      if (comicStripModel === ImageModel.DOUBAO_4_0) {
+        setIsSettingsModalOpen(true);
+      } else {
         setIsApiKeyModalOpen(true);
-        return;
+      }
+      return;
     }
     setIsLoading(true);
     setError(null);
@@ -226,7 +271,7 @@ const App: React.FC = () => {
     setComicStripVideoGenerationPhase('idle');
 
     try {
-        const { imageUrls, panelPrompts } = await generateComicStrip(comicStripStory, comicStripStyle, apiKey, comicStripNumImages);
+        const { imageUrls, panelPrompts } = await generateComicStrip(comicStripStory, comicStripStyle, effectiveApiKey, comicStripNumImages, comicStripModel);
         const resizedImageUrls = await Promise.all(imageUrls.map(src => resizeImage(src, 800)));
         const imagesWithIds: GeneratedImage[] = resizedImageUrls.map((src, index) => ({
             id: `${Date.now()}-${index}`,
@@ -234,7 +279,7 @@ const App: React.FC = () => {
             isFavorite: false,
         }));
         setComicStripImages(imagesWithIds);
-        
+
         if (imagesWithIds.length > 0) {
             const thumbnail = await createThumbnail(imagesWithIds[0].src);
             const newRecord: HistoryRecord = {
@@ -242,7 +287,8 @@ const App: React.FC = () => {
                 mode: 'comicStrip',
                 prompt: comicStripStory,
                 style: comicStripStyle,
-                model: ImageModel.IMAGEN,
+                model: comicStripModel,
+                apiProvider,
                 images: imagesWithIds,
                 thumbnail,
                 timestamp: Date.now(),
@@ -691,18 +737,37 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
   };
 
   const handleGenerateTextToImage = async () => {
-    if (!apiKey) {
-      setError('请先设置您的 Gemini API Key。');
-      setIsApiKeyModalOpen(true);
+    let effectiveApiKey: string | null = null;
+    let apiProvider: ApiProvider = ApiProvider.GEMINI;
+    let model: ImageModel = ImageModel.IMAGEN;
+
+    if (textToImageModel === ImageModel.DOUBAO_4_0) {
+      effectiveApiKey = volcengineApiKey;
+      apiProvider = ApiProvider.VOLCENGINE;
+      model = ImageModel.DOUBAO_4_0;
+    } else {
+      effectiveApiKey = apiKey;
+      apiProvider = ApiProvider.GEMINI;
+      model = textToImageModel;
+    }
+
+    if (!effectiveApiKey) {
+      setError(`请先设置您的 ${textToImageModel === ImageModel.DOUBAO_4_0 ? '火山引擎' : 'Gemini'} API Key。`);
+      if (textToImageModel === ImageModel.DOUBAO_4_0) {
+        setIsSettingsModalOpen(true);
+      } else {
+        setIsApiKeyModalOpen(true);
+      }
       return;
     }
+
     setIsLoading(true);
     setError(null);
     setTextToImageImages([]);
 
     try {
         const finalPrompt = buildStructuredPrompt(textToImagePrompt, textToImageKeywords);
-        const imageUrls = await generateTextToImage(finalPrompt, textToImageNegativePrompt, apiKey, textToImageNumImages, textToImageAspectRatio);
+        const imageUrls = await generateTextToImage(finalPrompt, textToImageNegativePrompt, effectiveApiKey, textToImageNumImages, textToImageAspectRatio, model, activeStyle);
         const resizedImageUrls = await Promise.all(imageUrls.map(src => resizeImage(src, 800)));
         const imagesWithIds: GeneratedImage[] = resizedImageUrls.map((src, index) => ({
             id: `${Date.now()}-${index}`,
@@ -710,7 +775,7 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
             isFavorite: false,
         }));
         setTextToImageImages(imagesWithIds);
-        
+
         if (imagesWithIds.length > 0) {
             const thumbnail = await createThumbnail(imagesWithIds[0].src);
             const newRecord: HistoryRecord = {
@@ -718,6 +783,8 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
                 mode: 'textToImage',
                 prompt: textToImagePrompt,
                 negativePrompt: textToImageNegativePrompt,
+                model,
+                apiProvider,
                 images: imagesWithIds,
                 thumbnail,
                 timestamp: Date.now(),
@@ -1128,6 +1195,27 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
     }
   };
   
+  // 设置保存处理函数
+  const handleSettingsSave = (geminiKey: string, volcengineKey: string) => {
+    // 保存 Gemini API Key
+    if (geminiKey.trim()) {
+      const trimmedGeminiKey = geminiKey.trim();
+      setApiKey(trimmedGeminiKey);
+      if (!isEnvApiKey) {
+        localStorage.setItem('gemini-api-key-generic', trimmedGeminiKey);
+      }
+    }
+
+    // 保存火山引擎 API Key
+    if (volcengineKey.trim()) {
+      const trimmedVolcengineKey = volcengineKey.trim();
+      setVolcengineApiKey(trimmedVolcengineKey);
+      localStorage.setItem('volcengine-api-key', trimmedVolcengineKey);
+    }
+
+    setError(null);
+  };
+
   // 新增导入导出处理函数
   const handleImportExportComplete = () => {
     // 重新加载历史记录
@@ -1287,9 +1375,10 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
-      <Header 
+      <Header
         onApiKeyClick={isEnvApiKey ? undefined : () => setIsApiKeyModalOpen(true)} // 只有在非环境变量API Key的情况下才允许打开API Key模态框
         onImportExportClick={() => setIsImportExportModalOpen(true)}
+        onSettingsClick={() => setIsSettingsModalOpen(true)}
         appMode={appMode}
         onModeChange={handleModeChange}
         isLoading={isLoading}
@@ -1347,6 +1436,8 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
             onStoryChange={handleComicStripStoryChange}
             style={comicStripStyle}
             onStyleChange={handleComicStripStyleChange}
+            activeModel={comicStripModel}
+            onModelChange={setComicStripModel}
             images={comicStripImages}
             onImageClick={handleImageClick}
             onToggleFavorite={handleGenericToggleFavorite}
@@ -1393,13 +1484,15 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
             selectedKeywords={textToImageKeywords}
             onToggleKeyword={handleToggleTextToImageKeyword}
             onToggleFavorite={handleGenericToggleFavorite}
+            activeModel={textToImageModel}
+            onModelChange={setTextToImageModel}
         />
       )}
 
       {appMode === 'imageToImage' && (
         <ImageToImage
-            apiKey={apiKey}
-            onApiKeyNeeded={() => setIsApiKeyModalOpen(true)}
+            apiKey={imageToImageModel === ImageModel.DOUBAO_4_0 ? volcengineApiKey : apiKey}
+            onApiKeyNeeded={() => (imageToImageModel === ImageModel.DOUBAO_4_0 ? setIsSettingsModalOpen(true) : setIsApiKeyModalOpen(true))}
             onGenerationStart={handleCreativeGenerationStart}
             onGenerationEnd={handleCreativeGenerationEnd}
             onResult={handleImageToImageResult}
@@ -1418,6 +1511,8 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
             inspirationStrength={inspirationStrength}
             onInspirationStrengthChange={handleInspirationStrengthChange}
             onToggleFavorite={handleGenericToggleFavorite}
+            activeModel={imageToImageModel}
+            onModelChange={setImageToImageModel}
         />
       )}
 
@@ -1510,6 +1605,15 @@ const handleComicPanelEditComplete = async (index: number, newImageSrc: string, 
         isOpen={isImportExportModalOpen}
         onClose={() => setIsImportExportModalOpen(false)}
         onImportComplete={handleImportExportComplete}
+      />
+
+      {/* 新增设置模态框 */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        onSave={handleSettingsSave}
+        currentGeminiKey={isEnvApiKey ? null : apiKey}
+        currentVolcengineKey={volcengineApiKey}
       />
     </div>
   );

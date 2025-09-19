@@ -1,4 +1,5 @@
 // components/ComicStrip.tsx
+/* eslint-disable jsx-a11y/button-has-title */
 
 import React, { useState } from 'react';
 import { ImageStyle, GeneratedImage, ComicStripGenerationPhase, ComicStripPanelStatus, ImageModel, ComicStripTransitionStatus } from '../types';
@@ -152,7 +153,9 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                 <span className="text-sm font-semibold text-slate-700">拼接中... ({stitchingProgress}%)</span>
                                 <div className="w-24 h-2 bg-slate-300 rounded-full overflow-hidden">
                                     <div 
-                                        className="h-full bg-green-500 rounded-full transition-all" 
+                                        className="h-full bg-green-500 rounded-full transition-all"
+                                        aria-hidden="true"
+                                        data-width={stitchingProgress}
                                         style={{ width: `${stitchingProgress}%`}}
                                     ></div>
                                 </div>
@@ -190,10 +193,12 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
 
                             return (
                                 <div key={image.id} className={`grid md:grid-cols-2 gap-6 items-start bg-white p-4 rounded-2xl shadow-lg border transition-all duration-300 ${hasVideo ? 'border-green-300' : 'border-slate-200'}`}>
-                                    <div
-                                        className="relative aspect-video w-full bg-slate-100 rounded-xl overflow-hidden shadow-inner group"
-                                        onClick={() => hasVideo && onPreviewComicPanel(index)}
-                                        role={hasVideo ? "button" : undefined}
+                                    <button
+                                        type="button"
+                                        title={hasVideo ? '预览该片段视频' : '图片预览'}
+                                        className="relative aspect-video w-full bg-slate-100 rounded-xl overflow-hidden shadow-inner group text-left"
+                                        onClick={() => hasVideo ? onPreviewComicPanel(index) : null}
+                                        disabled={!hasVideo}
                                     >
                                         <img src={image.src} alt={`Panel ${index + 1}`} className="w-full h-full object-cover" />
                                         {status === 'generating' && (
@@ -207,7 +212,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                                 <VideoPlayIcon className="w-12 h-12" />
                                             </div>
                                         )}
-                                    </div>
+                                    </button>
                                     <div className="flex flex-col h-full">
                                         <div className="flex justify-between items-center mb-2">
                                             <label htmlFor={`script-${index}`} className="block text-sm font-medium text-slate-600">
@@ -266,6 +271,8 @@ interface ComicStripProps {
   onStoryChange: (story: string) => void;
   style: ImageStyle;
   onStyleChange: (style: ImageStyle) => void;
+  activeModel: ImageModel;
+  onModelChange: (model: ImageModel) => void;
   images: GeneratedImage[];
   onImageClick: (index: number) => void;
   onToggleFavorite: (id: string) => void;
@@ -322,6 +329,8 @@ export const ComicStrip: React.FC<ComicStripProps> = ({
   onStoryChange,
   style,
   onStyleChange,
+  activeModel,
+  onModelChange,
   images,
   onImageClick,
   onToggleFavorite,
@@ -387,7 +396,7 @@ export const ComicStrip: React.FC<ComicStripProps> = ({
 
   return (
     <>
-      <section className="w-full flex flex-col items-center justify-center py-12 md:py-16 bg-white border-b border-slate-200">
+      <section className="w-full flex flex-col items-center justify-center py-12 md:py-16 bg-white border-b border-slate-200" aria-label="连环画生成">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-6xl font-extrabold text-slate-800 tracking-tight">
             故事成画，<span className="text-indigo-600">一键生成</span>
@@ -443,6 +452,27 @@ export const ComicStrip: React.FC<ComicStripProps> = ({
                     <StyleButton value={ImageStyle.CLAY} label="粘土风" icon="🗿" isActive={style === ImageStyle.CLAY} onClick={() => onStyleChange(ImageStyle.CLAY)} disabled={isLoading} />
                     <StyleButton value={ImageStyle.PHOTOREALISTIC} label="写实风" icon="📷" isActive={style === ImageStyle.PHOTOREALISTIC} onClick={() => onStyleChange(ImageStyle.PHOTOREALISTIC)} disabled={isLoading} />
                     <StyleButton value={ImageStyle.THREE_D_ANIMATION} label="3D动画" icon="🧸" isActive={style === ImageStyle.THREE_D_ANIMATION} onClick={() => onStyleChange(ImageStyle.THREE_D_ANIMATION)} disabled={isLoading} />
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                  <span className="text-slate-600 text-sm font-medium">模型：</span>
+                  <div className="flex items-center justify-center gap-2 bg-slate-100 p-1 rounded-full">
+                    <button
+                      type="button"
+                      onClick={() => onModelChange(ImageModel.IMAGEN)}
+                      disabled={isLoading}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 border ${activeModel === ImageModel.IMAGEN ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                    >
+                      Imagen 4.0
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onModelChange(ImageModel.DOUBAO_4_0)}
+                      disabled={isLoading}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors duration-200 border ${activeModel === ImageModel.DOUBAO_4_0 ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                    >
+                      豆包 4.0
+                    </button>
                   </div>
                 </div>
               </div>

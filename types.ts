@@ -16,6 +16,12 @@ export enum ImageStyle {
 export enum ImageModel {
   IMAGEN = 'imagen-4.0-generate-001',
   NANO_BANANA = 'gemini-2.5-flash-image-preview',
+  DOUBAO_4_0 = 'doubao-4.0-generate-001',
+}
+
+export enum ApiProvider {
+  GEMINI = 'gemini',
+  VOLCENGINE = 'volcengine',
 }
 
 export interface GeneratedImage {
@@ -40,6 +46,7 @@ export interface HistoryRecord {
   prompt: string;
   style?: ImageStyle; // For wiki mode & comicStrip mode
   model?: ImageModel; // For wiki mode
+  apiProvider?: ApiProvider; // API provider
   thumbnail: string; // Base64 thumbnail
   images?: GeneratedImage[]; // For image modes
   videoUrl?: string; // For video mode

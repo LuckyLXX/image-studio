@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { GeneratedImage, AspectRatio } from '../types';
+import { GeneratedImage, AspectRatio, ImageModel } from '../types';
 import { LoadingState } from './LoadingState';
 import { ImageGrid } from './ImageGrid';
 import { EmptyState } from './EmptyState';
@@ -33,6 +33,8 @@ interface TextToImageProps {
   selectedKeywords: string[];
   onToggleKeyword: (keyword: string) => void;
   onToggleFavorite: (imageId: string) => void;
+  activeModel: ImageModel;
+  onModelChange: (model: ImageModel) => void;
 }
 
 const SettingButton: React.FC<{
@@ -76,6 +78,8 @@ export const TextToImage: React.FC<TextToImageProps> = ({
   selectedKeywords,
   onToggleKeyword,
   onToggleFavorite,
+  activeModel,
+  onModelChange,
 }) => {
   const [error, setError] = useState<string | null>(null);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
@@ -231,6 +235,21 @@ export const TextToImage: React.FC<TextToImageProps> = ({
                         </div>
                     </div>
                 </div>
+
+        <div className="w-full text-left mt-2">
+          <label className="block text-sm font-medium text-slate-600 mb-2">生成模型</label>
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-full w-max">
+            <SettingButton label="Imagen 4.0" isActive={activeModel === ImageModel.IMAGEN} onClick={() => onModelChange(ImageModel.IMAGEN)} disabled={isLoading}>
+              <span>Imagen 4.0</span>
+            </SettingButton>
+            <SettingButton label="Nano-Banana" isActive={activeModel === ImageModel.NANO_BANANA} onClick={() => onModelChange(ImageModel.NANO_BANANA)} disabled={isLoading}>
+              <span>Nano-Banana</span>
+            </SettingButton>
+            <SettingButton label="豆包 4.0" isActive={activeModel === ImageModel.DOUBAO_4_0} onClick={() => onModelChange(ImageModel.DOUBAO_4_0)} disabled={isLoading}>
+              <span>豆包 4.0</span>
+            </SettingButton>
+          </div>
+        </div>
 
                  {error && <p className="text-sm text-red-600">{error}</p>}
                 <button

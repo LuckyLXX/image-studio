@@ -1,11 +1,13 @@
 import React from 'react';
 import { KeyIcon } from './icons/KeyIcon';
+import { SettingsIcon } from './icons/SettingsIcon';
 import { AppMode } from '../types';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 
 interface HeaderProps {
   onApiKeyClick: (() => void) | undefined; // 修改类型以允许undefined
   onImportExportClick: () => void;
+  onSettingsClick: () => void;
   appMode: AppMode;
   onModeChange: (mode: AppMode) => void;
   isLoading: boolean;
@@ -32,7 +34,7 @@ const ModeButton: React.FC<{
   );
 };
 
-export const Header: React.FC<HeaderProps> = ({ onApiKeyClick, onImportExportClick, appMode, onModeChange, isLoading }) => {
+export const Header: React.FC<HeaderProps> = ({ onApiKeyClick, onImportExportClick, onSettingsClick, appMode, onModeChange, isLoading }) => {
   const titles = {
     wiki: { icon: '💡', text: '图解百科' },
     textToImage: { icon: '✨', text: '以文生图' },
@@ -74,6 +76,17 @@ export const Header: React.FC<HeaderProps> = ({ onApiKeyClick, onImportExportCli
     </button>
   );
 
+  // 新增设置按钮
+  const SettingsButton = () => (
+    <button
+      onClick={onSettingsClick}
+      className="p-2 rounded-full text-slate-600 hover:bg-slate-200 hover:text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+      aria-label="设置"
+    >
+      <SettingsIcon className="w-6 h-6" />
+    </button>
+  );
+
   const ModeSwitcher = () => (
     <div className="flex items-center bg-slate-200/80 p-1 rounded-full overflow-x-auto">
       <ModeButton label="图解百科" isActive={appMode === 'wiki'} onClick={() => onModeChange('wiki')} disabled={isLoading} />
@@ -97,6 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ onApiKeyClick, onImportExportCli
             <ModeSwitcher />
           </div>
           <div className="flex-1 flex justify-end gap-2">
+            <SettingsButton />
             <ImportExportButton />
             {/* 只有在非环境变量API Key的情况下才显示API Key按钮 */}
             {onApiKeyClick && (
@@ -110,6 +124,7 @@ export const Header: React.FC<HeaderProps> = ({ onApiKeyClick, onImportExportCli
           <div className="flex items-center justify-between">
             <Title />
             <div className="flex gap-1">
+              <SettingsButton />
               <ImportExportButton />
               {/* 只有在非环境变量API Key的情况下才显示API Key按钮 */}
               {onApiKeyClick && (
